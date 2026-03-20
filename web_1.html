@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A股策略筛选 · 先筛后搜</title>
+    <style>
+        * { box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; }
+        body { background: #f3f5f8; margin: 0; min-height: 100vh; display: flex; justify-content: center; padding: 20px; }
+        .container { max-width: 1600px; width: 100%; background: white; border-radius: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); padding: 28px 32px; }
+        h1 { font-size: 1.9rem; font-weight: 600; margin: 0 0 8px 0; color: #0b1c34; display: flex; align-items: center; gap: 8px; }
+        .strategies-grid { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 32px; }
+        .strategy-card { flex: 1 1 280px; background: #ffffff; border: 1px solid #e5eaf0; border-radius: 24px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+        .strategy-card.selected { border-color: #2d7aff; box-shadow: 0 8px 20px rgba(45,122,255,0.15); background: #f9fbff; }
+        .card-header { padding: 18px 20px 12px 20px; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+        .card-header input[type="radio"] { width: 18px; height: 18px; accent-color: #2d7aff; margin: 0; cursor: pointer; }
+        .card-header h3 { margin: 0; font-size: 1.25rem; font-weight: 600; color: #1a2639; flex: 1; }
+        .collapse-icon { color: #7f8fa4; font-size: 1.2rem; transition: transform 0.2s; }
+        .card-content { padding: 0 20px 20px 20px; border-top: 1px solid #edf2f7; font-size: 0.9rem; color: #2d3a4f; }
+        .card-content p { margin: 8px 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+        .cond-badge { background: #eef2f7; padding: 4px 10px; border-radius: 30px; font-size: 0.8rem; color: #2b3c5a; display: inline-block; margin: 4px 4px 0 0; }
+        .strategy-note { font-size: 0.8rem; color: #d25f5f; background: #fff1f0; padding: 6px 10px; border-radius: 40px; margin-top: 12px; }
+        .control-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; background: #f8fafd; padding: 16px 24px; border-radius: 48px; margin: 20px 0 28px; }
+        .slider-group { display: flex; align-items: center; gap: 18px; flex: 2; min-width: 260px; }
+        .slider-label { font-weight: 500; color: #1e2b3f; white-space: nowrap; }
+        .slider-label span { background: #2d7aff; color: white; padding: 4px 12px; border-radius: 40px; font-size: 0.9rem; margin-left: 8px; }
+        input[type=range] { flex: 1; height: 6px; border-radius: 10px; background: #dbe1ea; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: #2d7aff; border-radius: 20px; box-shadow: 0 2px 8px rgba(45,122,255,0.5); cursor: pointer; }
+        .search-wrapper { display: flex; gap: 8px; flex: 1; min-width: 300px; align-items: center; }
+        .search-box { flex: 1; display: flex; gap: 8px; background: white; border-radius: 40px; border: 1px solid #cfddee; padding: 4px 12px; align-items: center; }
+        .search-box input { border: none; background: transparent; padding: 10px 0; width: 100%; outline: none; font-size: 0.95rem; }
+        .search-box span { color: #7b8ca6; padding: 0 6px; }
+        .search-btn { background: white; border: 1px solid #cfddee; color: #2b3c5a; font-weight: 600; padding: 12px 22px; border-radius: 40px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.02); display: flex; align-items: center; gap: 6px; }
+        .search-btn:hover:not(:disabled) { background: #f0f4fe; border-color: #2d7aff; color: #1a5ad0; }
+        .filter-btn { background: #2d7aff; border: none; color: white; font-weight: 600; padding: 12px 28px; border-radius: 40px; font-size: 1rem; cursor: pointer; transition: background 0.2s, transform 0.1s; box-shadow: 0 6px 14px rgba(45,122,255,0.3); border: 1px solid rgba(255,255,255,0.2); min-width: 140px; display: flex; align-items: center; justify-content: center; }
+        .filter-btn:hover:not(:disabled) { background: #1a5ad0; }
+        .filter-btn:disabled { background: #9bb9f0; cursor: not-allowed; box-shadow: none; }
+        .stats { color: #2b3c5a; font-weight: 500; white-space: nowrap; margin-left: auto; }
+        .table-wrapper { border-radius: 20px; border: 1px solid #eef2f6; overflow-x: auto; background: white; margin-top: 10px; max-height: 400px; overflow-y: auto; box-shadow: inset 0 2px 6px rgba(0,0,0,0.02); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 1200px; }
+        th { background: #f7f9fc; color: #1d2b41; font-weight: 600; padding: 16px 12px; white-space: nowrap; position: sticky; top: 0; border-bottom: 2px solid #dde3ec; cursor: pointer; user-select: none; }
+        th:hover { background: #eaeef5; }
+        td { padding: 14px 12px; border-bottom: 1px solid #eceff4; color: #1f2b3a; }
+        .match-cell { font-weight: 600; color: #1e3b5c; }
+        .match-bar-bg { background: #e3e8f0; border-radius: 20px; width: 70px; height: 6px; display: inline-block; margin-left: 6px; }
+        .match-bar-fill { height: 6px; border-radius: 20px; background: #2d7aff; }
+        .code-col { color: #54657e; font-family: monospace; }
+        .name-col { font-weight: 500; }
+        .positive { color: #cb3b3b; }
+        .negative { color: #2e9a48; }
+        .ai-section { background: white; border-radius: 24px; padding: 28px 32px; margin-top: 30px; box-shadow: 0 8px 20px rgba(0,0,0,0.04); border: 1px solid #e5eaf0; }
+        .ai-header { font-size: 1.4rem; font-weight: 600; margin: 0 0 20px 0; color: #1a2639; display: flex; align-items: center; gap: 8px; }
+        .ai-container { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; }
+        .ai-box { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 300px; }
+        .ai-box label { font-weight: 600; color: #2d3a4f; font-size: 0.95rem; }
+        .ai-box textarea { width: 100%; height: 320px; padding: 16px; border: 1px solid #cfddee; border-radius: 16px; resize: none; font-size: 0.9rem; background: #fdfdfe; color: #1e2b3f; line-height: 1.5; transition: border-color 0.2s; }
+        .ai-box textarea:focus { outline: none; border-color: #2d7aff; }
+        .ai-box textarea[readonly] { background: #f4f7fb; cursor: default; }
+        .ai-btn-wrapper { display: flex; align-items: center; justify-content: center; padding: 20px 0; }
+        .ai-btn { background: #6b21a8; border: none; color: white; font-weight: 600; padding: 16px 36px; border-radius: 40px; font-size: 1.1rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 6px 16px rgba(107, 33, 168, 0.3); }
+        .ai-btn:hover:not(:disabled) { background: #581c87; transform: translateY(-2px); }
+        .ai-btn:disabled { background: #c084fc; cursor: not-allowed; transform: none; box-shadow: none; }
+    </style>
+</head>
+<body>
+<div class="container" id="app">
+    <h1> A股策略筛选 · 先筛后搜</h1>
+
+    <div class="strategies-grid">
+        <div class="strategy-card" :class="{selected: selectedStrategy === 'buffett'}">
+            <div class="card-header" @click="toggleCollapse('buffett')">
+                <input type="radio" name="strategy" value="buffett" v-model="selectedStrategy" @click.stop>
+                <h3>🧠 巴菲特·安全边际</h3>
+                <span class="collapse-icon">{{ collapseState.buffett ? '▼' : '▲' }}</span>
+            </div>
+            <div class="card-content" v-show="collapseState.buffett">
+                <p><span class="cond-badge">① 债务/股本 <0.5</span> <span class="cond-badge">② ROE >8%</span> <span class="cond-badge">③ 市净率 <1.5</span></p>
+                <div class="strategy-note">⚠️ 债务/股本由资产负债率%换算 · 共3项有效条件</div>
+            </div>
+        </div>
+        <div class="strategy-card" :class="{selected: selectedStrategy === 'graham'}">
+            <div class="card-header" @click="toggleCollapse('graham')">
+                <input type="radio" name="strategy" value="graham" v-model="selectedStrategy" @click.stop>
+                <h3>📚 格雷厄姆·神奇公式</h3>
+                <span class="collapse-icon">{{ collapseState.graham ? '▼' : '▲' }}</span>
+            </div>
+            <div class="card-content" v-show="collapseState.graham">
+                <p><span class="cond-badge">① 市盈率(TTM) <10倍</span> <span class="cond-badge">② 市净率 ≤2倍</span> <span class="cond-badge">③ 总市值 ≥218.1亿</span></p>
+            </div>
+        </div>
+        <div class="strategy-card" :class="{selected: selectedStrategy === 'bluechip'}">
+            <div class="card-header" @click="toggleCollapse('bluechip')">
+                <input type="radio" name="strategy" value="bluechip" v-model="selectedStrategy" @click.stop>
+                <h3>🔷 相对低估蓝筹</h3>
+                <span class="collapse-icon">{{ collapseState.bluechip ? '▼' : '▲' }}</span>
+            </div>
+            <div class="card-content" v-show="collapseState.bluechip">
+                <p><span class="cond-badge">① PB >0</span> <span class="cond-badge">② PB ≤2</span> <span class="cond-badge">③ 市值 ≥218.1亿</span> <span class="cond-badge">④ PB 最低20%</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="control-bar">
+        <div class="slider-group">
+            <span class="slider-label">📊 最低匹配度 <span>{{ matchThreshold }}%</span></span>
+            <input type="range" min="0" max="100" step="1" v-model.number="matchThreshold">
+        </div>
+        <div class="search-wrapper">
+            <div class="search-box"><input type="text" placeholder="代码或名称" v-model="searchText" :disabled="loading"></div>
+            <button class="search-btn" @click="applySearch" :disabled="loading || baseFilteredStocks.length === 0"><span>🔎</span> 结果内搜索</button>
+        </div>
+        <button class="filter-btn" @click="applyFilter" :disabled="loading">
+            <span v-if="loading">⏳ 筛选中 {{ fakeProgress }}%</span><span v-else>🔍 开始筛选</span>
+        </button>
+        <div class="stats">📌 当前结果 {{ displayStocks.length }} 只</div>
+    </div>
+
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th @click="sortBy('代码')">代码</th>
+                    <th @click="sortBy('名称')">名称</th>
+                    <th @click="sortBy('最新价')">最新价(0311)</th>
+                    <th @click="sortBy('涨跌幅%')">涨跌幅%</th>
+                    <th @click="sortBy('市盈率(TTM)')">PE(TTM)</th>
+                    <th @click="sortBy('市净率')">PB</th>
+                    <th @click="sortBy('ROE%')">ROE%</th>
+                    <th @click="sortBy('资产负债率%')">资产负债率%</th>
+                    <th @click="sortBy('matchPct')">匹配度</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="stock in sortedStocks" :key="stock['代码']">
+                    <td class="code-col">{{ stock['代码'] }}</td>
+                    <td class="name-col">{{ stock['名称'] }}</td>
+                    <td>{{ formatNum(stock['最新价']) }}</td>
+                    <td :class="[stock['涨跌幅%']>=0?'positive':'negative']">{{ stock['涨跌幅%']?.toFixed(2) }}%</td>
+                    <td>{{ stock['市盈率(TTM)']?.toFixed(2) ?? '—' }}</td>
+                    <td>{{ stock['市净率']?.toFixed(2) ?? '—' }}</td>
+                    <td>{{ stock['ROE%']?.toFixed(2) ?? '—' }}%</td>
+                    <td>{{ stock['资产负债率%']?.toFixed(2) ?? '—' }}%</td>
+                    <td class="match-cell">
+                        {{ stock.matchCount }}/{{ stock.totalValid }} ({{ (stock.matchPct*100).toFixed(1) }}%)
+                        <span class="match-bar-bg"><span class="match-bar-fill" :style="{width: (stock.matchPct*70)+'px'}"></span></span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="markowitz-module" style="margin-top: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9;">
+        <h3>📊 马科维茨投资组合优化 (TOP 3 股票)</h3>
+        <p style="color: #666;">系统已自动提取筛选结果中排名前三的股票进行效率边界分析。</p>
+    
+        <div id="markowitz-content" style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div id="chart-container" style="flex: 2; min-width: 300px;">
+                <img id="markowitz-plot" src="" style="width: 100%; display: none; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <div id="plot-placeholder" style="height: 200px; background: #eee; display: flex; align-items: center; justify-content: center; color: #888;">
+                    等待数据输入或正在计算中...
+                </div>
+            </div>
+
+            <div id="data-container" style="flex: 1; min-width: 200px; padding: 15px; background: white; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                <h4>最优配置比例 (Max Sharpe)</h4>
+                <ul id="weight-list" style="list-style: none; padding-left: 0;">
+                    <li style="color: #999;">暂无数据</li>
+                </ul>
+            </div>
+        </div>
+        
+        <button onclick="runMarkowitz()" style="margin-top: 15px; padding: 10px 20px; background-color: #2d7aff; color: white; border: none; border-radius: 40px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(45,122,255,0.3);">
+            手动刷新优化分析
+        </button>
+    </div>
+
+    <div class="ai-section">
+        <h2 class="ai-header">🤖 AI 深度分析 · 附带五日数据</h2>
+        <div class="ai-container">
+            <div class="ai-box">
+                <label>📌 前三支股票 + 五日历史 (发送给模型的输入)：</label>
+                <textarea v-model="aiPrompt"></textarea>
+            </div>
+            
+            <div class="ai-btn-wrapper">
+                <button class="ai-btn" @click="requestAIRecommendation" :disabled="isRecommending || sortedStocks.length === 0">
+                    <span v-if="isRecommending">🧠 模型正在思考中...</span>
+                    <span v-else>✨ 开始推荐最优股票</span>
+                </button>
+            </div>
+
+            <div class="ai-box">
+                <label>💡 模型推荐结果：</label>
+                <textarea v-model="aiResponse" readonly placeholder="点击中间的“开始推荐”按钮，等待本地 Qwen3 模型分析后，结果将显示在这里..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script>
+(function() {
+    const csvRaw = `日期,代码,名称,最新价,涨跌幅%,涨跌额,成交量,成交额,市值,最高,最低,今开,昨收,市盈率(动),市盈率(TTM),市盈率(静),市净率,股息率%,PEG,ROE%,净利增长%,资产负债率%
+2026-03-05,301658,首航新能,36.45,-2.80,-1.05,174569,626841914,18944329942,38.15,35.10,37.42,37.50,124.52,73.18,121.96,6,20.65,5,114106900.86,-47.572846006115,30.1723924804
+2026-03-06,301658,首航新能,35.46,-2.72,-0.99,119338,418504383,18944329942,35.86,34.02,35.39,36.45,124.52,73.18,121.96,6,20.65,5,114106900.86,-47.572846006115,30.1723924804
+2026-03-09,301658,首航新能,41.00,15.62,5.54,226537,895525141,18944329942,42.55,35.16,35.16,35.46,124.52,73.18,121.96,6,20.65,5,114106900.86,-47.572846006115,30.1723924804
+2026-03-10,301658,首航新能,38.28,-6.63,-2.72,158925,615905074,18944329942,40.00,38.19,39.75,41.00,124.52,73.18,121.96,6,20.65,5,114106900.86,-47.572846006115,30.1723924804
+2026-03-11,301658,首航新能,45.94,20.01,7.66,207413,886152659.78,18944329942,45.94,37.70,38.40,38.28,124.52,73.18,121.96,6,20.65,5,114106900.86,-47.572846006115,30.1723924804
+2026-03-05,300504,天邑股份,15.97,4.04,0.62,143161,229387704,5236194886,16.28,15.72,15.83,15.35,-71.1,-198.15,-43.59,2.47,24.88,5,-55235752.24,-243.565552537282,10.3352376975
+2026-03-06,300504,天邑股份,15.79,-1.13,-0.18,73175,115446109,5236194886,16.02,15.61,15.98,15.97,-71.1,-198.15,-43.59,2.47,24.88,5,-55235752.24,-243.565552537282,10.3352376975
+2026-03-09,300504,天邑股份,15.66,-0.82,-0.13,71092,109683274,5236194886,15.70,15.20,15.52,15.79,-71.1,-198.15,-43.59,2.47,24.88,5,-55235752.24,-243.565552537282,10.3352376975
+2026-03-10,300504,天邑股份,16.10,2.81,0.44,77849,124466465,5236194886,16.16,15.76,15.81,15.66,-71.1,-198.15,-43.59,2.47,24.88,5,-55235752.24,-243.565552537282,10.3352376975
+2026-03-11,300504,天邑股份,19.32,20.00,3.22,340133,636318428.67,5236194886,19.32,16.37,16.38,16.10,-71.1,-198.15,-43.59,2.47,24.88,5,-55235752.24,-243.565552537282,10.3352376975
+2026-03-05,300246,宝莱特,12.47,-0.56,-0.07,62999,79437215,4445366923,12.83,12.38,12.76,12.54,-399.68,-62.22,-67.21,3.84,10.45,5,-8341710.38,38.845793629417,25.3131500793
+2026-03-06,300246,宝莱特,12.95,3.85,0.48,91457,117335127,4445366923,13.09,12.38,12.60,12.47,-399.68,-62.22,-67.21,3.84,10.45,5,-8341710.38,38.845793629417,25.3131500793
+2026-03-09,300246,宝莱特,12.98,0.23,0.03,81404,102770548,4445366923,13.02,12.36,12.85,12.95,-399.68,-62.22,-67.21,3.84,10.45,5,-8341710.38,38.845793629417,25.3131500793
+2026-03-10,300246,宝莱特,14.00,7.86,1.02,224044,310954893,4445366923,14.30,12.91,12.96,12.98,-399.68,-62.22,-67.21,3.84,10.45,5,-8341710.38,38.845793629417,25.3131500793
+2026-03-11,300246,宝莱特,16.80,20.00,2.80,306965,488959454.16,4445366923,16.80,14.17,14.17,14.00,-399.68,-62.22,-67.21,3.84,10.45,5,-8341710.38,38.845793629417,25.3131500793
+2026-03-05,300243,瑞丰高材,11.75,1.82,0.21,83374,98139014,3543541060,11.91,11.65,11.81,11.54,109.04,160.51,358.67,3.3,13.01,5,24373143.65,-33.35168940716,15.0143003069
+2026-03-06,300243,瑞丰高材,12.11,3.06,0.36,82504,99074548,3543541060,12.12,11.65,11.72,11.75,109.04,160.51,358.67,3.3,13.01,5,24373143.65,-33.35168940716,15.0143003069
+2026-03-09,300243,瑞丰高材,11.94,-1.40,-0.17,80955,96351753,3543541060,12.04,11.75,11.97,12.11,109.04,160.51,358.67,3.3,13.01,5,24373143.65,-33.35168940716,15.0143003069
+2026-03-10,300243,瑞丰高材,12.16,1.84,0.22,72690,88093356,3543541060,12.22,11.92,12.00,11.94,109.04,160.51,358.67,3.3,13.01,5,24373143.65,-33.35168940716,15.0143003069
+2026-03-11,300243,瑞丰高材,14.15,16.37,1.99,350407,457875642.08,3543541060,14.48,12.22,12.37,12.16,109.04,160.51,358.67,3.3,13.01,5,24373143.65,-33.35168940716,15.0143003069
+2026-03-05,301361,众智科技,39.91,1.89,0.74,54700,218833270,5808656480,40.80,39.41,39.60,39.17,61.67,72.86,58.79,4.8,4.6,5,70645015.56,37.019289119553,58.9717562485
+2026-03-06,301361,众智科技,41.09,2.96,1.18,68531,279821346,5808656480,41.65,39.44,39.64,39.91,61.67,72.86,58.79,4.8,4.6,5,70645015.56,37.019289119553,58.9717562485
+2026-03-09,301361,众智科技,40.72,-0.90,-0.37,56491,227106186,5808656480,41.43,39.21,39.74,41.09,61.67,72.86,58.79,4.8,4.6,5,70645015.56,37.019289119553,58.9717562485
+2026-03-10,301361,众智科技,43.57,7.00,2.85,95089,405952472,5808656480,44.50,40.41,40.72,40.72,61.67,72.86,58.79,4.8,4.6,5,70645015.56,37.019289119553,58.9717562485
+2026-03-11,301361,众智科技,49.93,14.60,6.36,151376,728039572.34,5808656480,52.28,42.66,44.00,43.57,61.67,72.86,58.79,4.8,4.6,5,70645015.56,37.019289119553,58.9717562485
+2026-03-05,301150,中一科技,43.27,0.07,0.03,69054,300509011,12799852669,44.60,42.69,44.20,43.24,248.08,-152.02,557.17,3.6,12.48,5,38696713.67,156.514655424786,5.5308734785
+2026-03-06,301150,中一科技,49.63,14.70,6.36,226506,1075743908,12799852669,50.35,43.00,43.00,43.27,248.08,-152.02,557.17,3.6,12.48,5,38696713.67,156.514655424786,5.5308734785
+2026-03-09,301150,中一科技,48.25,-2.78,-1.38,132084,625644162,12799852669,48.60,45.97,47.90,49.63,248.08,-152.02,557.17,3.6,12.48,5,38696713.67,156.514655424786,5.5308734785
+2026-03-10,301150,中一科技,48.00,-0.52,-0.25,116856,563386318,12799852669,49.21,47.60,48.40,48.25,248.08,-152.02,557.17,3.6,12.48,5,38696713.67,156.514655424786,5.5308734785
+2026-03-11,301150,中一科技,54.88,14.33,6.88,351024,1896834996.08,12799852669,57.60,48.96,48.96,48.00,248.08,-152.02,557.17,3.6,12.48,5,38696713.67,156.514655424786,5.5308734785
+2026-03-05,688295,中复神鹰,30.30,0.17,0.05,38134,116094021,32436000000,30.92,29.91,30.70,30.25,335.57,-260.77,335.57,6.86,8.26,32,96658200,177.7095969444,17.8211533733
+2026-03-06,688295,中复神鹰,30.34,0.13,0.04,38266,116788702,32436000000,30.95,30.12,30.25,30.30,335.57,-260.77,335.57,6.86,8.26,32,96658200,177.7095969444,17.8211533733
+2026-03-09,688295,中复神鹰,30.04,-0.99,-0.30,48261,142708868,32436000000,30.24,29.09,30.00,30.34,335.57,-260.77,335.57,6.86,8.26,32,96658200,177.7095969444,17.8211533733
+2026-03-10,688295,中复神鹰,31.57,5.09,1.53,52218,162280959,32436000000,31.58,30.16,30.16,30.04,335.57,-260.77,335.57,6.86,8.26,32,96658200,177.7095969444,17.8211533733
+2026-03-11,688295,中复神鹰,36.04,14.16,4.47,251441,876986069,32436000000,37.50,31.72,33.00,31.57,335.57,-260.77,335.57,6.86,8.26,32,96658200,177.7095969444,17.8211533733
+2026-03-05,301040,中环海陆,38.06,2.37,0.88,53585,201171446,4325044591,38.36,36.57,37.59,37.18,-49.06,-28.16,-28.36,5.92,1.31,5,-66123804.72,1.645195259571,0.8490468289
+2026-03-06,301040,中环海陆,38.34,0.74,0.28,46810,179358683,4325044591,39.38,37.60,37.96,38.06,-49.06,-28.16,-28.36,5.92,1.31,5,-66123804.72,1.645195259571,0.8490468289
+2026-03-09,301040,中环海陆,37.25,-2.84,-1.09,79232,292406367,4325044591,38.62,35.79,37.71,38.34,-49.06,-28.16,-28.36,5.92,1.31,5,-66123804.72,1.645195259571,0.8490468289
+2026-03-10,301040,中环海陆,38.02,2.07,0.77,58667,220775817,4325044591,38.13,36.90,37.47,37.25,-49.06,-28.16,-28.36,5.92,1.31,5,-66123804.72,1.645195259571,0.8490468289
+2026-03-11,301040,中环海陆,43.25,13.76,5.23,130708,529726045.32,4325044591,43.39,37.55,37.90,38.02,-49.06,-28.16,-28.36,5.92,1.31,5,-66123804.72,1.645195259571,0.8490468289
+2026-03-05,688411,海博思创,223.85,0.78,1.74,31214,702651243,48432273874,230.25,220.26,225.03,222.11,51.03,74.76,51.03,10.13,8.25,32,949036000,46.4927732451,18.0123092737
+2026-03-06,688411,海博思创,229.40,2.48,5.55,42647,960500987,48432273874,230.41,217.85,222.00,223.85,51.03,74.76,51.03,10.13,8.25,32,949036000,46.4927732451,18.0123092737
+2026-03-09,688411,海博思创,237.38,3.48,7.98,62025,1443951093,48432273874,242.00,219.00,223.50,229.40,51.03,74.76,51.03,10.13,8.25,32,949036000,46.4927732451,18.0123092737
+2026-03-10,688411,海博思创,239.40,0.85,2.02,53773,1283766851,48432273874,241.88,234.02,237.38,237.38,51.03,74.76,51.03,10.13,8.25,32,949036000,46.4927732451,18.0123092737
+2026-03-11,688411,海博思创,268.93,12.34,29.53,151307,4049250957,48432273874,287.28,239.10,240.00,239.40,51.03,74.76,51.03,10.13,8.25,32,949036000,46.4927732451,18.0123092737
+2026-03-05,301291,明阳电气,58.58,0.67,0.39,192394,1141068863,21619850000,60.64,57.86,59.04,58.19,34.68,32.63,31.14,4.4,2.98,5,467525181.26,7.311568651871,21.9907971446
+2026-03-06,301291,明阳电气,59.98,2.39,1.40,233206,1411060750,21619850000,62.76,58.28,59.16,58.58,34.68,32.63,31.14,4.4,2.98,5,467525181.26,7.311568651871,21.9907971446
+2026-03-09,301291,明阳电气,62.80,4.70,2.82,271764,1676921540,21619850000,63.50,59.98,60.41,59.98,34.68,32.63,31.14,4.4,2.98,5,467525181.26,7.311568651871,21.9907971446
+2026-03-10,301291,明阳电气,61.83,-1.54,-0.97,237217,1456766760,21619850000,64.16,59.91,62.30,62.80,34.68,32.63,31.14,4.4,2.98,5,467525181.26,7.311568651871,21.9907971446
+2026-03-11,301291,明阳电气,69.25,12.00,7.42,310682,2029420610.49,21619850000,69.25,59.66,60.89,61.83,34.68,32.63,31.14,4.4,2.98,5,467525181.26,7.311568651871,21.9907971446`;
+
+    function parseFullCSV(text) {
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^\uFEFF/, '')); 
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',').map(v => v.trim());
+            if (values.length !== headers.length) continue;
+            const obj = {};
+            headers.forEach((h, idx) => {
+                let val = values[idx];
+                if (h === '日期' || h === '代码' || h === '名称') { obj[h] = val; } 
+                else { 
+                    let num = parseFloat(val);
+                    obj[h] = isNaN(num) ? null : num;
+                }
+            });
+            rows.push(obj);
+        }
+        return rows;
+    }
+
+    function buildStockData(rows) {
+        const historyMap = new Map();
+        rows.forEach(row => {
+            const code = row['代码'];
+            if (!historyMap.has(code)) historyMap.set(code, []);
+            historyMap.get(code).push(row);
+        });
+        for (let [code, arr] of historyMap.entries()) {
+            arr.sort((a, b) => a['日期'].localeCompare(b['日期']));
+        }
+        const latestStocks = [];
+        for (let [code, arr] of historyMap.entries()) {
+            if (arr.length > 0) latestStocks.push({ ...arr[arr.length-1] });
+        }
+        return { latestStocks, historyMap };
+    }
+
+    function computePbThreshold20(latestStocks) {
+        const pbs = latestStocks.map(s => s['市净率']).filter(pb => pb !== null && pb > 0).sort((a,b)=>a-b);
+        if (pbs.length === 0) return Infinity;
+        const index = Math.floor(pbs.length * 0.2);
+        return pbs[index] || pbs[0];
+    }
+
+    const MARKET_CAP_MIN = 218.1 * 1e8;
+
+    new Vue({
+        el: '#app',
+        data: {
+            rawStocks: [],           
+            stockHistory: new Map(), 
+            pbThreshold: 0,
+            selectedStrategy: 'buffett',
+            matchThreshold: 80,
+            searchText: '',
+            collapseState: { buffett: true, graham: true, bluechip: true },
+            sortColumn: 'matchPct',
+            sortAsc: false,
+            baseFilteredStocks: [],
+            displayStocks: [],
+            loading: false,
+            fakeProgress: 0,
+            isRecommending: false,
+            aiResponse: ''
+        },
+        computed: {
+            sortedStocks() {
+                const col = this.sortColumn, asc = this.sortAsc;
+                return this.displayStocks.slice().sort((a, b) => {
+                    let av = col === 'matchPct' ? a.matchPct : a[col];
+                    let bv = col === 'matchPct' ? b.matchPct : b[col];
+                    if (typeof av === 'string' && typeof bv === 'string') return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+                    return asc ? (av ?? -Infinity) - (bv ?? -Infinity) : (bv ?? -Infinity) - (av ?? -Infinity);
+                });
+            },
+            aiPrompt() {
+                const top3 = this.sortedStocks.slice(0, 3);
+                if (top3.length === 0) return "暂无符合条件的股票数据，请先进行筛选。";
+                
+                let promptStr = "你是一个专业的金融分析师。请根据以下通过量化策略筛选出来的A股基本面数据，以及它们最近五个交易日（3月5日-3月11日）的历史表现，评估并推荐其中最值得投资的一只。请给出明确的选择，并分条列出详细的推荐理由。\n\n【备选股票池】：\n";
+                top3.forEach((s, i) => {
+                    const code = s['代码'];
+                    const history = this.stockHistory.get(code) || [];
+                    const last5 = history.slice(-5);
+                    
+                    promptStr += `[${i+1}] 代码:${s['代码']} | 名称:${s['名称']} (最新数据: 价${this.formatNum(s['最新价'])} PE:${this.formatNum(s['市盈率(TTM)'])} PB:${this.formatNum(s['市净率'])} ROE:${this.formatNum(s['ROE%'])}% 负债率:${this.formatNum(s['资产负债率%'])}%)\n`;
+                    promptStr += `    五日交易数据:\n`;
+                    last5.forEach(d => {
+                        promptStr += `      ${d['日期']} 收盘价:${this.formatNum(d['最新价'])} 涨跌幅:${this.formatNum(d['涨跌幅%'])}% PE:${this.formatNum(d['市盈率(TTM)'])} PB:${this.formatNum(d['市净率'])}\n`;
+                    });
+                    promptStr += '\n';
+                });
+                promptStr += "请开始你的分析：";
+                return promptStr;
+            }
+        },
+        methods: {
+            toggleCollapse(strat) { this.$set(this.collapseState, strat, !this.collapseState[strat]); },
+            sortBy(col) { this.sortAsc = this.sortColumn === col ? !this.sortAsc : false; this.sortColumn = col; },
+            formatNum(val) { return val?.toFixed(2) ?? '—'; },
+            
+            computeMatchForStock(stock, strategyKey) {
+                const s = stock;
+                let validCount = 0, matchCount = 0;
+                
+                if (strategyKey === 'buffett') {
+                    if (s['市净率'] !== null) { validCount++; if (s['市净率'] < 1.5) matchCount++; }
+                    if (s['ROE%'] !== null) { validCount++; if (s['ROE%'] > 8) matchCount++; }
+                    if (s['资产负债率%'] !== null && s['资产负债率%'] >=0 && s['资产负债率%'] < 100) { 
+                        validCount++; 
+                        const debtEquity = s['资产负债率%'] / (100 - s['资产负债率%']);
+                        if (debtEquity < 0.5) matchCount++;
+                    }
+                }
+                else if (strategyKey === 'graham') {
+                    if (s['市盈率(TTM)'] !== null && s['市盈率(TTM)'] > 0) { validCount++; if (s['市盈率(TTM)'] < 10) matchCount++; }
+                    if (s['市净率'] !== null && s['市净率'] > 0) { validCount++; if (s['市净率'] <= 2) matchCount++; }
+                    if (s['市值'] !== null) { validCount++; if (s['市值'] >= MARKET_CAP_MIN) matchCount++; }
+                }
+                else if (strategyKey === 'bluechip') {
+                    if (s['市净率'] !== null && s['市净率'] > 0) { validCount++; matchCount++; } 
+                    if (s['市净率'] !== null) { validCount++; if (s['市净率'] <= 2) matchCount++; }
+                    if (s['市值'] !== null) { validCount++; if (s['市值'] >= MARKET_CAP_MIN) matchCount++; }
+                    if (s['市净率'] !== null && s['市净率'] > 0) { 
+                        validCount++; 
+                        if (s['市净率'] <= this.pbThreshold) matchCount++;
+                    }
+                }
+                return { matchCount, totalValid: validCount, matchPct: validCount === 0 ? 0 : matchCount / validCount };
+            },
+
+            computeBaseFilteredStocks() {
+                const threshold = this.matchThreshold / 100;
+                return this.rawStocks.map(s => ({ 
+                    ...s, 
+                    ...this.computeMatchForStock(s, this.selectedStrategy) 
+                })).filter(s => s.matchPct >= threshold);
+            },
+
+            applyFilter() {
+                if (this.loading) return;
+                this.loading = true; this.fakeProgress = 0;
+                const interval = setInterval(() => { if (this.fakeProgress < 90) this.fakeProgress += 10; }, 200);
+                setTimeout(() => {
+                    clearInterval(interval);
+                    this.baseFilteredStocks = this.computeBaseFilteredStocks();
+                    this.displayStocks = this.baseFilteredStocks.slice();
+                    this.loading = false; this.fakeProgress = 0;
+                    
+                    // =========================
+                    // 新增：自动调用马科维茨画图
+                    // =========================
+                    setTimeout(() => {
+                        if (typeof window.runMarkowitz === 'function') {
+                            window.runMarkowitz();
+                        }
+                    }, 100); 
+
+                }, 600);
+            },
+
+            applySearch() {
+                if (!this.baseFilteredStocks.length) return;
+                const search = this.searchText.toLowerCase().trim();
+                this.displayStocks = search === '' ? this.baseFilteredStocks.slice() : this.baseFilteredStocks.filter(s => 
+                    (s['代码'] && s['代码'].toLowerCase().includes(search)) || 
+                    (s['名称'] && s['名称'].toLowerCase().includes(search))
+                );
+            },
+
+            async requestAIRecommendation() {
+                if (this.isRecommending || this.sortedStocks.length === 0) return;
+                this.isRecommending = true;
+                this.aiResponse = "🔄 模型正在极速分析这些股票的数据与基本面，请稍候...\n(请勿退出当前界面)";
+                try {
+                    const res = await fetch('/api/recommend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: this.aiPrompt })
+                    });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        this.aiResponse = data.result;
+                    } else {
+                        this.aiResponse = "❌ 模型推理发生错误：" + (data.message || "未知原因");
+                    }
+                } catch (error) {
+                    this.aiResponse = "⚠️ 网络请求失败！请确保你正在运行修改后的 Qwen3_LoRA.py 且服务地址为 127.0.0.1:5000。\n错误详情：" + error.message;
+                } finally {
+                    this.isRecommending = false;
+                }
+            }
+        },
+        created() {
+            const allRows = parseFullCSV(csvRaw);
+            const { latestStocks, historyMap } = buildStockData(allRows);
+            const pb20 = computePbThreshold20(latestStocks);
+            this.rawStocks = latestStocks;
+            this.stockHistory = historyMap;
+            this.pbThreshold = pb20;
+        },
+        mounted() { 
+            this.applyFilter(); 
+        }
+    });
+})();
+</script>
+
+<script>
+// ============================================
+// 修复：提取实际存在的 class `.name-col` 作为股票名称
+// ============================================
+async function runMarkowitz() {
+    const stockElements = document.querySelectorAll('.name-col'); 
+    let stocks = [];
+    stockElements.forEach((el, index) => {
+        if (index < 3) stocks.push(el.innerText.trim());
+    });
+
+    if (stocks.length === 0) {
+        document.getElementById('plot-placeholder').innerText = "未筛选出足够的数据...";
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/markowitz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stocks: stocks })
+        });
+        const result = await response.json();
+
+        if (result.error) {
+            console.error(result.error);
+            return;
+        }
+
+        const plotImg = document.getElementById('markowitz-plot');
+        const placeholder = document.getElementById('plot-placeholder');
+        const weightList = document.getElementById('weight-list');
+
+        plotImg.src = "data:image/png;base64," + result.plot;
+        plotImg.style.display = "block";
+        placeholder.style.display = "none";
+
+        weightList.innerHTML = "";
+        for (const [stock, weight] of Object.entries(result.weights)) {
+            weightList.innerHTML += `<li style="margin-bottom: 8px;"><strong>${stock}:</strong> <span style="color: #28a745;">${weight}</span></li>`;
+        }
+    } catch (error) {
+        console.error("Error:", error);
+    }
+}
+</script>
+</body>
+</html>
